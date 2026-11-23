@@ -134,6 +134,10 @@ pub struct EwsMailRequest {
     /// system's ([`crate::EwsServer::trusted`]); empty when none.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub trusted: String,
+    /// The owner agreed to the older encryption this server offers alone
+    /// ([`crate::EwsServer::older_encryption`]).
+    #[serde(skip_serializing_if = "is_false")]
+    pub older_encryption: bool,
     /// Read the server's folder hierarchy in this run (`SyncFolderHierarchy` from `hierarchy`): the
     /// first run, a run that reads every folder, and the run after one that brought no folders.
     #[serde(skip_serializing_if = "is_false")]
@@ -200,6 +204,9 @@ pub struct EwsFetchRequest {
     /// The fingerprint of the one certificate the owner trusts for this account; empty when none.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub trusted: String,
+    /// The owner agreed to the older encryption this server offers alone.
+    #[serde(skip_serializing_if = "is_false")]
+    pub older_encryption: bool,
     /// The server ids of the messages to fetch, in the order they are wanted.
     pub ids: Vec<String>,
     /// Nobody is waiting: it gets the share of requests background work has.

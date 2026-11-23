@@ -28,6 +28,12 @@ pub struct EwsServer {
     /// errors" switch: any other certificate is refused.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub trusted: String,
+    /// The owner agreed to the older encryption (CBC suites, no forward secrecy) that this
+    /// server offers alone, when MailCraft's own TLS found none in common with it. Off unless
+    /// the owner said yes for this account; a host that has the system's TLS to speak it (Windows)
+    /// then connects that way, and the certificate is still checked.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub older_encryption: bool,
     /// Where the account's folder hierarchy goes on from: the sync state the server gave at the
     /// end of the last `SyncFolderHierarchy`, opaque. Kept in the mailbox file with the folders it
     /// brought, in one step; empty until the hierarchy has been read once. Not a setting: an edit
@@ -49,6 +55,7 @@ impl std::fmt::Debug for EwsServer {
             .field("url", &!self.url.is_empty())
             .field("username", &!self.username.is_empty())
             .field("trusted", &!self.trusted.is_empty())
+            .field("older_encryption", &self.older_encryption)
             .field("hierarchy", &!self.hierarchy.is_empty())
             .field("parents", &self.parents)
             .finish()

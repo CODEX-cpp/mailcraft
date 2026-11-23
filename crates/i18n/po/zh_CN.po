@@ -18037,6 +18037,11 @@ msgstr "服务器的响应中未提供 Exchange Web 服务地址。请向管理�
 msgid "The server answered, but not as an Exchange server does. Check its address in Server settings."
 msgstr "服务器已响应，但响应与 Exchange 服务器不符。请在服务器设置中检查地址。"
 
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "The server at {host} offers only older encryption (CBC suites). MailCraft doesn't use it unless you agree: it is weaker than what current servers offer."
+msgstr ""
+
 #. what a command says
 #: crates/mobile/src/fetch.rs
 #, fuzzy
@@ -20390,6 +20395,16 @@ msgstr "改用 https://"
 msgid "Use my own working hours"
 msgstr "使用我自己的工作时间"
 
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Use older encryption for this account"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Use older encryption for this server?"
+msgstr ""
+
 #. name
 #: crates/ui-egui/src/motion.rs crates/ui-egui/src/theme.rs
 #, fuzzy
@@ -21425,6 +21440,11 @@ msgstr "您自己的密钥只能由您在窗口中移除"
 #, fuzzy
 msgid "Your own name."
 msgstr "您自己的姓名。"
+
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Your sign-in and mail are still encrypted, and the server's certificate is still checked. Agree only if your administrator can't turn the newer encryption on."
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/mail_view.rs
@@ -25002,6 +25022,11 @@ msgstr "{host} 是 Mozilla 的 ISP 数据库为 {domain} 列出的服务器。"
 #, fuzzy
 msgid "{host} is what {domain} publishes for mail programs (its autoconfig document)."
 msgstr "{host} 是 {domain} 向邮件程序发布的服务器（其 autoconfig 文档）。"
+
+#. why a mail server couldn't be used
+#: crates/net/src/lib.rs
+msgid "{host} offers only older encryption (CBC suites) that MailCraft doesn't use unless you agree to it"
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/account_setup.rs

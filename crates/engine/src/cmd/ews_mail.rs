@@ -113,6 +113,7 @@ fn base(s: &Session, account: Id) -> Result<EwsMailRequest, CmdError> {
         url: server.url.clone(),
         username: server.username.clone(),
         trusted: server.trusted.clone(),
+        older_encryption: server.older_encryption,
         ..Default::default()
     })
 }
@@ -228,6 +229,7 @@ pub fn ews_fetch_request(s: &Session, account: Id, message: Option<Id>, most: us
         url: server.url.clone(),
         username: server.username.clone(),
         trusted: server.trusted.clone(),
+        older_encryption: server.older_encryption,
         ids,
         background: message.is_none(),
     })
@@ -265,6 +267,7 @@ pub fn ews_resolve_request_for(s: &Session, account: Id, texts: &[String]) -> Re
         url: server.url.clone(),
         username: server.username.clone(),
         trusted: server.trusted.clone(),
+        older_encryption: server.older_encryption,
         texts: asked,
     })
 }

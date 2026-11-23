@@ -441,8 +441,13 @@ fn ews_server(v: &Value, before: Option<&EwsServer>) -> Result<EwsServer, CmdErr
                     Some(_) => return Err(bad(format!("`ews.{key}` is a string"))),
                 }
             }
+            match settings.get("olderEncryption") {
+                None => {}
+                Some(Value::Bool(agreed)) => (server.older_encryption, given) = (*agreed, true),
+                Some(_) => return Err(bad("`ews.olderEncryption` is true or false")),
+            }
         }
-        Some(_) => return Err(bad("`ews` is {\"url\": string, \"username\"?: string, \"trusted\"?: string}")),
+        Some(_) => return Err(bad("`ews` is {\"url\": string, \"username\"?: string, \"trusted\"?: string, \"olderEncryption\"?: bool}")),
     }
     if (given || before.is_none())
         && let Some(why) = server.problem()

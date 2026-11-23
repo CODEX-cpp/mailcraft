@@ -18047,6 +18047,11 @@ msgstr "El servidor respondió sin la dirección de Exchange Web Services. Pída
 msgid "The server answered, but not as an Exchange server does. Check its address in Server settings."
 msgstr "El servidor respondió, pero no como lo hace un servidor Exchange. Compruebe su dirección en la configuración del servidor."
 
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "The server at {host} offers only older encryption (CBC suites). MailCraft doesn't use it unless you agree: it is weaker than what current servers offer."
+msgstr ""
+
 #. what a command says
 #: crates/mobile/src/fetch.rs
 #, fuzzy
@@ -20416,6 +20421,16 @@ msgstr "Usar https:// en su lugar"
 msgid "Use my own working hours"
 msgstr "Usar mi propio horario laboral"
 
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Use older encryption for this account"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Use older encryption for this server?"
+msgstr ""
+
 #. name
 #: crates/ui-egui/src/motion.rs crates/ui-egui/src/theme.rs
 #, fuzzy
@@ -21448,6 +21463,11 @@ msgstr "Su propia clave solo la quita usted, en la ventana"
 #, fuzzy
 msgid "Your own name."
 msgstr "Su propio nombre."
+
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Your sign-in and mail are still encrypted, and the server's certificate is still checked. Agree only if your administrator can't turn the newer encryption on."
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/mail_view.rs
@@ -25029,6 +25049,11 @@ msgstr "{host} es el que la base de datos de ISP de Mozilla indica para {domain}
 #, fuzzy
 msgid "{host} is what {domain} publishes for mail programs (its autoconfig document)."
 msgstr "{host} es el que {domain} publica para los programas de correo (su documento de autoconfiguración)."
+
+#. why a mail server couldn't be used
+#: crates/net/src/lib.rs
+msgid "{host} offers only older encryption (CBC suites) that MailCraft doesn't use unless you agree to it"
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/account_setup.rs

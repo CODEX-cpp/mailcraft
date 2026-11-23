@@ -78,6 +78,23 @@ impl Default for Patience {
 enum Io {
     Plain(TcpStream),
     Tls(Box<StreamOwned<ClientConnection, TcpStream>>),
+    /// Windows' own TLS (Schannel), for a server whose owner agreed to its older encryption
+    /// ([`allow_older_encryption`]): it still speaks the suites (CBC) that rustls leaves out. The
+    /// system checks the certificate.
+    #[cfg(windows)]
+    System(Box<schannel::tls_stream::TlsStream<TcpStream>>),
+}
+
+impl Io {
+    /// The socket under the connection, whichever way it is encrypted.
+    fn tcp(&self) -> &TcpStream {
+        match self {
+            Io::Plain(tcp) => tcp,
+            Io::Tls(tls) => &tls.sock,
+            #[cfg(windows)]
+            Io::System(tls) => tls.get_ref(),
+        }
+    }
 }
 
 /// A connection, encrypted or (to this machine, or before STARTTLS) not.
@@ -110,10 +127,7 @@ impl<'a> Stream<'a> {
     pub(crate) fn leave(&mut self) {
         self.cancel = None;
         self.patience = FAREWELL_TIMEOUT;
-        let tcp = match &self.io {
-            Io::Plain(tcp) => tcp,
-            Io::Tls(tls) => &tls.sock,
-        };
+        let tcp = self.io.tcp();
         let _ = tcp.set_read_timeout(Some(FAREWELL_TIMEOUT));
         let _ = tcp.set_write_timeout(Some(FAREWELL_TIMEOUT));
     }
@@ -122,10 +136,7 @@ impl<'a> Stream<'a> {
     /// never for ever): for a connection kept open ([`crate::kept`]) and taken up again by a
     /// request with patience of its own.
     pub(crate) fn wait_for(&mut self, io: Duration) -> std::io::Result<()> {
-        let tcp = match &self.io {
-            Io::Plain(tcp) => tcp,
-            Io::Tls(tls) => &tls.sock,
-        };
+        let tcp = self.io.tcp();
         let io = Some(io.min(IO_TIMEOUT).max(Duration::from_millis(1)));
         tcp.set_read_timeout(io).and_then(|()| tcp.set_write_timeout(io))
     }
@@ -136,20 +147,14 @@ impl<'a> Stream<'a> {
     /// few minutes a command and its answer are.
     pub(crate) fn wait_for_news(&mut self, poll: Duration, patience: Duration) -> std::io::Result<()> {
         self.patience = patience;
-        let tcp = match &self.io {
-            Io::Plain(tcp) => tcp,
-            Io::Tls(tls) => &tls.sock,
-        };
+        let tcp = self.io.tcp();
         tcp.set_read_timeout(Some(poll.max(Duration::from_millis(1))))
     }
 
     /// The waits of an ordinary command and its answer again, after [`Stream::wait_for_news`].
     pub(crate) fn answer_normally(&mut self) -> std::io::Result<()> {
         self.patience = COMMAND_TIMEOUT;
-        let tcp = match &self.io {
-            Io::Plain(tcp) => tcp,
-            Io::Tls(tls) => &tls.sock,
-        };
+        let tcp = self.io.tcp();
         tcp.set_read_timeout(Some(IO_TIMEOUT))
     }
 
@@ -159,6 +164,8 @@ impl<'a> Stream<'a> {
         match &self.io {
             Io::Plain(_) => None,
             Io::Tls(tls) => tls.conn.peer_certificates()?.first().map(|c| c.as_ref().to_vec()),
+            #[cfg(windows)]
+            Io::System(tls) => tls.peer_certificate().ok().map(|c| c.to_der().to_vec()),
         }
     }
 
@@ -185,6 +192,8 @@ impl Read for Stream<'_> {
         let n = match &mut self.io {
             Io::Plain(tcp) => tcp.read(buf),
             Io::Tls(tls) => tls.read(buf).map_err(mid_connection),
+            #[cfg(windows)]
+            Io::System(tls) => tls.read(buf),
         }?;
         self.moved = self.moved.saturating_add(n as u64);
         Ok(n)
@@ -197,6 +206,8 @@ impl Write for Stream<'_> {
         let n = match &mut self.io {
             Io::Plain(tcp) => tcp.write(buf),
             Io::Tls(tls) => tls.write(buf).map_err(mid_connection),
+            #[cfg(windows)]
+            Io::System(tls) => tls.write(buf),
         }?;
         self.moved = self.moved.saturating_add(n as u64);
         Ok(n)
@@ -207,6 +218,8 @@ impl Write for Stream<'_> {
         match &mut self.io {
             Io::Plain(tcp) => tcp.flush(),
             Io::Tls(tls) => tls.flush(),
+            #[cfg(windows)]
+            Io::System(tls) => tls.flush(),
         }
     }
 }
@@ -287,6 +300,8 @@ pub(crate) fn upgrade<'a>(stream: Stream<'a>, host: &str) -> Result<Stream<'a>, 
     let mut secured = match io {
         Io::Plain(tcp) => secure(tcp, host, None)?,
         tls @ Io::Tls(_) => Stream::over(tls),
+        #[cfg(windows)]
+        tls @ Io::System(_) => Stream::over(tls),
     };
     (secured.cancel, secured.patience) = (cancel, patience);
     Ok(secured)
@@ -368,6 +383,11 @@ fn tls_config() -> Result<Arc<ClientConfig>, String> {
 /// Shake hands over `tcp` and check the server's certificate against `host`.
 fn secure<'a>(mut tcp: TcpStream, host: &str, tls: Option<Arc<ClientConfig>>) -> Result<Stream<'a>, NetError> {
     let failed = |reason: Text| NetError::Tls { host: host.to_string(), reason };
+    // A server whose owner agreed to its older encryption goes straight to the system's TLS.
+    #[cfg(windows)]
+    if older_encryption_allowed(host) {
+        return secure_with_system(tcp, host);
+    }
     let config = match tls {
         Some(config) => config,
         // (The system's own words, as it said them.)
@@ -390,10 +410,90 @@ fn secure<'a>(mut tcp: TcpStream, host: &str, tls: Option<Arc<ClientConfig>>) ->
             return Err(failed(said!("the server took too long")));
         }
         waits(&tcp, io.min(left))?;
-        connection.complete_io(&mut tcp).map_err(|e| failed(handshake_problem(&e)))?;
+        connection.complete_io(&mut tcp).map_err(|e| {
+            // A server that offers only older encryption, which the system's TLS can still speak:
+            // not used until the owner agrees (`NetError::OlderEncryption`).
+            #[cfg(windows)]
+            if older_encryption_failure(&e) && system_tls_works(&tcp, host) {
+                return NetError::OlderEncryption { host: host.to_string() };
+            }
+            failed(handshake_problem(&e))
+        })?;
     }
     waits(&tcp, io)?;
     Ok(Stream::over(Io::Tls(Box::new(StreamOwned::new(connection, tcp)))))
+}
+
+/// The hosts whose owners agreed to older encryption (CBC suites, no forward secrecy), kept in
+/// memory for the run: the account's saved choice is told here when it is loaded or confirmed.
+static OLDER_ENCRYPTION: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+/// Most hosts kept: an account is one host, and nobody has this many.
+const MAX_OLDER_ENCRYPTION_HOSTS: usize = 256;
+
+/// The name a host is kept under: no spaces or final dot, lower case.
+fn host_key(host: &str) -> String {
+    host.trim().trim_end_matches('.').to_ascii_lowercase()
+}
+
+/// Tell the transport whether the owner agreed to older encryption for `host`. It matters on
+/// Windows only, where the system's own TLS speaks what rustls leaves out; elsewhere it has no effect.
+pub fn allow_older_encryption(host: &str, allowed: bool) {
+    let key = host_key(host);
+    if key.is_empty() {
+        return;
+    }
+    let Ok(mut hosts) = OLDER_ENCRYPTION.lock() else { return };
+    hosts.retain(|known| *known != key);
+    if allowed && hosts.len() < MAX_OLDER_ENCRYPTION_HOSTS {
+        hosts.push(key);
+    }
+}
+
+/// Whether the owner agreed to older encryption for `host`.
+pub fn older_encryption_allowed(host: &str) -> bool {
+    let key = host_key(host);
+    OLDER_ENCRYPTION.lock().is_ok_and(|hosts| hosts.contains(&key))
+}
+
+/// Whether a failed handshake looks like a server with no suite in common: its alert, no suite
+/// at all, or a server that simply closes the connection (older Windows servers do).
+#[cfg(windows)]
+fn older_encryption_failure(e: &std::io::Error) -> bool {
+    no_suite_in_common(e)
+        || refused_handshake(e)
+        || matches!(e.kind(), ErrorKind::UnexpectedEof | ErrorKind::ConnectionReset | ErrorKind::ConnectionAborted)
+}
+
+/// Whether the system's TLS gets a handshake with the server `tcp` is connected to, and accepts
+/// its certificate: a new connection, only shaken hands over and then dropped. Nothing of the
+/// owner's goes over it.
+#[cfg(windows)]
+fn system_tls_works(tcp: &TcpStream, host: &str) -> bool {
+    let Ok(address) = tcp.peer_addr() else { return false };
+    let Ok(probe) = TcpStream::connect_timeout(&address, HANDSHAKE_TIMEOUT) else { return false };
+    let wait = Some(IO_TIMEOUT.min(HANDSHAKE_TIMEOUT));
+    if probe.set_read_timeout(wait).and_then(|()| probe.set_write_timeout(wait)).is_err() {
+        return false;
+    }
+    secure_with_system(probe, host).is_ok()
+}
+
+/// Shake hands over `tcp` with Windows' own TLS, which also checks the certificate (the chain,
+/// the dates and the server's name) against the authorities the system trusts.
+#[cfg(windows)]
+fn secure_with_system<'a>(tcp: TcpStream, host: &str) -> Result<Stream<'a>, NetError> {
+    use schannel::schannel_cred::{Direction, SchannelCred};
+    use schannel::tls_stream::{Builder, HandshakeError};
+    let failed = |reason: Text| NetError::Tls { host: host.to_string(), reason };
+    // The system's own settings for an outgoing connection: which protocols and suites it uses is its choice.
+    let cred = SchannelCred::builder().acquire(Direction::Outbound).map_err(|e| failed(handshake_problem(&e)))?;
+    let mut builder = Builder::new();
+    builder.domain(host);
+    match builder.connect(cred, tcp) {
+        Ok(stream) => Ok(Stream::over(Io::System(Box::new(stream)))),
+        Err(HandshakeError::Failure(e)) => Err(failed(handshake_problem(&e))),
+        Err(HandshakeError::Interrupted(_)) => Err(failed(said!("the server took too long"))),
+    }
 }
 
 /// An error from the middle of an encrypted connection, with a record that failed its check said
@@ -446,6 +546,10 @@ mod tls_error_tests;
 #[cfg(test)]
 #[path = "transport_dial_tests.rs"]
 mod dial_tests;
+
+#[cfg(test)]
+#[path = "transport_system_tls_tests.rs"]
+mod system_tls_tests;
 
 #[cfg(test)]
 mod tests {

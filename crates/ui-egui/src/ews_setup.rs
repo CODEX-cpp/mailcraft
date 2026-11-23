@@ -35,6 +35,9 @@ pub struct EwsSetupJob {
     /// The SHA-256 fingerprint of the one certificate the owner has just agreed to trust for this
     /// account although the system doesn't; empty for none.
     pub trusted: String,
+    /// The owner has just agreed to the older encryption (CBC suites) the server offers alone, for
+    /// this account ([`EwsSetupEnd::OlderEncryption`]).
+    pub older_encryption: bool,
     /// Only look at the certificate the server at `url` shows: nothing is signed in, so no
     /// password is sent ([`MailApp::review_ews_certificate`]).
     pub certificate_only: bool,
@@ -160,6 +163,12 @@ pub enum EwsSetupEnd {
     Certificate(EwsCertificate),
     /// A job that only looked at the certificate: nothing needs the owner's say now.
     CertificateFine,
+    /// The server at `url` offers only older, weaker encryption (CBC suites) that MailCraft doesn't
+    /// use unless the owner agrees, for this account.
+    OlderEncryption {
+        /// The address of the server that showed it: the account is added with this address.
+        url: String,
+    },
     /// It didn't work, and why.
     Failed(EwsSetupFailure),
 }

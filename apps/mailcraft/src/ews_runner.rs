@@ -105,6 +105,14 @@ pub(crate) struct Transport {
     auth_problem: Mutex<Option<AuthProblem>>,
     /// How many EWS requests the run has made, for its timings ([`Transport::requests_asked`]).
     asked: AtomicU32,
+    /// The server offers only older encryption that the owner hasn't agreed to yet: what stopped
+    /// the exchange, kept apart from a plain TLS error as a certificate's question is.
+    older: AtomicBool,
+}
+
+/// Tell the transport whether the owner agreed to older encryption for the server at `url`.
+pub(crate) fn agree_older_encryption(url: &str, agreed: bool) {
+    mailcraft_net::allow_older_encryption(host_of(url), agreed);
 }
 
 /// The host of an address (`mail.example.org` of `https://mail.example.org:444/EWS/…`), for the
@@ -127,7 +135,13 @@ impl Transport {
             sign_in: Mutex::new(SignIn::default()),
             auth_problem: Mutex::new(None),
             asked: AtomicU32::new(0),
+            older: AtomicBool::new(false),
         }
+    }
+
+    /// The server offers only older encryption that the owner hasn't agreed to: setup asks.
+    pub(crate) fn older_encryption(&self) -> bool {
+        self.older.load(Ordering::Relaxed)
     }
 
     /// With the key NTLM signs in with, for a server that offers it.
@@ -350,7 +364,10 @@ impl Transport {
     fn judged_for(&self, error: NetError, request: &HttpRequest) -> TransportError {
         // (Not reached the server, or not past the handshake: nothing of the request went out.)
         let after_write = !request.is_repeatable()
-            && !matches!(error, NetError::Connect { .. } | NetError::Certificate(_) | NetError::Tls { .. } | NetError::Config(_));
+            && !matches!(
+                error,
+                NetError::Connect { .. } | NetError::Certificate(_) | NetError::Tls { .. } | NetError::OlderEncryption { .. } | NetError::Config(_)
+            );
         let judged = self.judged(error);
         if after_write { TransportError::Lost } else { judged }
     }
@@ -362,6 +379,10 @@ impl Transport {
         match error {
             NetError::Certificate(problem) => {
                 *self.stopped_at.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(*problem);
+                TransportError::Tls
+            }
+            NetError::OlderEncryption { .. } => {
+                self.older.store(true, Ordering::Relaxed);
                 TransportError::Tls
             }
             NetError::Tls { .. } => TransportError::Tls,
@@ -519,6 +540,7 @@ pub(crate) fn run_mail_with(request: &EwsMailRequest, password: &str, cancel: &A
         Ok(client) => client,
         Err(why) => return emit(mailcraft_ews::failed_run(request, why)),
     };
+    agree_older_encryption(&request.url, request.older_encryption);
     let transport = Transport::new(&request.trusted).with_ntlm(ntlm_key(&request.username, &request.email, password));
     let mut pause = |ms: u32| wait(cancel, ms);
     let mut lap = Lap::start(transport.requests_asked());
@@ -556,6 +578,7 @@ pub(crate) fn run_fetch_with(request: &EwsFetchRequest, password: &str, cancel: 
             return GraphFetchResult { account: request.account, email: request.email.clone(), errors: vec![why.to_owned()], ..Default::default() };
         }
     };
+    agree_older_encryption(&request.url, request.older_encryption);
     let transport = Transport::new(&request.trusted).with_ntlm(ntlm_key(&request.username, &request.email, password));
     let mut pause = |ms: u32| wait(cancel, ms);
     let result = crate::block_on::block_on(mailcraft_ews::fetch_messages(&client, &transport, request, cancel, &mut pause));
@@ -592,6 +615,7 @@ pub(crate) fn run_resolve_with(request: &EwsResolveRequest, password: &str, canc
             return out;
         }
     };
+    agree_older_encryption(&request.url, request.older_encryption);
     let transport = Transport::new(&request.trusted).with_ntlm(ntlm_key(&request.username, &request.email, password));
     for text in request.texts.iter().take(MAX_RESOLVE_TEXTS) {
         let Some(lookup) = ResolveNames::new(text) else { continue };

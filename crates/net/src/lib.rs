@@ -126,6 +126,7 @@ mod native {
     pub use crate::pinned::pin_check_under_way;
     pub use crate::send::send;
     pub use crate::sync::{sync, sync_with, token_may_go_to};
+    pub use crate::transport::{allow_older_encryption, older_encryption_allowed};
 
     /// Whether this build can talk to mail servers.
     pub const AVAILABLE: bool = true;
@@ -168,6 +169,12 @@ mod native {
         /// ([`https`](crate::https)): what setup shows is in it. It holds nothing of the
         /// certificate in its text.
         Certificate(Box<CertificateProblem>),
+        /// The server offers only older encryption (CBC suites, no forward secrecy), which MailCraft
+        /// doesn't use by itself but the system's TLS can speak: the owner may agree to it for this
+        /// account ([`allow_older_encryption`]). Only on Windows.
+        OlderEncryption {
+            host: String,
+        },
         /// A shared mailbox Microsoft won't open for the owner of the token (#70), by Graph's own
         /// code: asking again by itself changes nothing.
         SharedRefused(mailcraft_model::sync::SharedRefusal),
@@ -204,6 +211,9 @@ mod native {
                 NetError::ConsentNeeded(text) => Text::verbatim(format!("permission is still to be given: {text}")),
                 NetError::Forbidden(text) | NetError::Busy { text, .. } => Text::verbatim(text.clone()),
                 NetError::Certificate(problem) => Text::verbatim(problem.to_string()),
+                NetError::OlderEncryption { host } => {
+                    said!("{host} offers only older encryption (CBC suites) that MailCraft doesn't use unless you agree to it", host)
+                }
                 NetError::SharedRefused(refusal) => Text::verbatim(refusal.said()),
             }
         }
@@ -226,7 +236,11 @@ mod native {
                 NetError::ConsentNeeded(text) => NetError::ConsentNeeded(clean(text)),
                 NetError::Forbidden(text) => NetError::Forbidden(clean(text)),
                 NetError::Busy { text, retry_after } => NetError::Busy { text: clean(text), retry_after },
-                unworded @ (NetError::SignInCancelled | NetError::SignInTimedOut | NetError::SharedRefused(_) | NetError::Certificate(_)) => unworded,
+                unworded @ (NetError::SignInCancelled
+                | NetError::SignInTimedOut
+                | NetError::SharedRefused(_)
+                | NetError::Certificate(_)
+                | NetError::OlderEncryption { .. }) => unworded,
             }
         }
 

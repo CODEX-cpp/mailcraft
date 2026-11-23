@@ -14969,6 +14969,11 @@ msgstr ""
 msgid "The server answered, but not as an Exchange server does. Check its address in Server settings."
 msgstr ""
 
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "The server at {host} offers only older encryption (CBC suites). MailCraft doesn't use it unless you agree: it is weaker than what current servers offer."
+msgstr ""
+
 #. what a command says
 #: crates/mobile/src/fetch.rs
 msgid "The server couldn't be searched. Try again in a few minutes."
@@ -16938,6 +16943,16 @@ msgstr ""
 msgid "Use my own working hours"
 msgstr ""
 
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Use older encryption for this account"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Use older encryption for this server?"
+msgstr ""
+
 #. name
 #: crates/ui-egui/src/motion.rs crates/ui-egui/src/theme.rs
 msgid "Use system setting"
@@ -17794,6 +17809,11 @@ msgstr ""
 #. interface
 #: crates/ui-egui/src/reading/warnings.rs
 msgid "Your own name."
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Your sign-in and mail are still encrypted, and the server's certificate is still checked. Agree only if your administrator can't turn the newer encryption on."
 msgstr ""
 
 #. interface
@@ -20789,6 +20809,11 @@ msgstr ""
 #. interface
 #: crates/ui-egui/src/account_setup.rs
 msgid "{host} is what {domain} publishes for mail programs (its autoconfig document)."
+msgstr ""
+
+#. why a mail server couldn't be used
+#: crates/net/src/lib.rs
+msgid "{host} offers only older encryption (CBC suites) that MailCraft doesn't use unless you agree to it"
 msgstr ""
 
 #. interface

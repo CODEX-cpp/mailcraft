@@ -1,0 +1,1 @@
+- An Exchange server that offers only older encryption (CBC suites) now asks you, when you add the account, whether to use it for that account alone; on Windows MailCraft then connects through the system's own TLS, still checking the server's certificate, and it stays off for every other server.

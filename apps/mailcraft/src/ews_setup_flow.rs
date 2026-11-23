@@ -107,6 +107,7 @@ fn make_job(email: &str, username: &str, password: &str, url: &str) -> (EwsSetup
         password: password.into(),
         url: url.into(),
         trusted: String::new(),
+        older_encryption: false,
         certificate_only: false,
         cancel: Arc::new(AtomicBool::new(false)),
         answers,
@@ -376,6 +377,30 @@ fn the_fingerprint_the_owner_agreed_to_goes_with_the_next_test_and_the_certifica
     // Fine now.
     let world = Fake::new(AutodiscoverStandIn::new()).scripted(Probed::Works("basic"));
     assert_eq!(ended(&run(&world, &job)), EwsSetupEnd::CertificateFine);
+}
+
+#[test]
+fn a_server_that_offers_only_older_encryption_ends_the_test_with_the_question_and_works_once_agreed() {
+    // Not agreed: the test ends with the question for this server's address, and nothing else.
+    let world = Fake::new(AutodiscoverStandIn::new()).scripted(Probed::OlderEncryption);
+    let (job, _) = standin_job(EWS);
+    assert_eq!(ended(&run(&world, &job)), EwsSetupEnd::OlderEncryption { url: EWS.to_owned() });
+    // A look at the certificate alone finds it too.
+    let world = Fake::new(AutodiscoverStandIn::new()).scripted(Probed::OlderEncryption);
+    let (mut job, _) = make_job(ME, "", "", EWS);
+    job.certificate_only = true;
+    assert_eq!(ended(&run(&world, &job)), EwsSetupEnd::OlderEncryption { url: EWS.to_owned() });
+    // Agreed: the next test goes on as any other, and the agreement is told to the transport
+    // for this server alone (and taken back when the owner hasn't agreed).
+    let world = Fake::new(AutodiscoverStandIn::new()).scripted(Probed::Works("basic"));
+    let (mut job, _) = standin_job(EWS);
+    job.older_encryption = true;
+    assert!(matches!(ended(&run(&world, &job)), EwsSetupEnd::Works { .. }));
+    assert!(mailcraft_net::older_encryption_allowed("mail.example.org"));
+    let world = Fake::new(AutodiscoverStandIn::new()).scripted(Probed::Works("basic"));
+    let (job, _) = standin_job(EWS);
+    assert!(matches!(ended(&run(&world, &job)), EwsSetupEnd::Works { .. }));
+    assert!(!mailcraft_net::older_encryption_allowed("mail.example.org"));
 }
 
 #[test]

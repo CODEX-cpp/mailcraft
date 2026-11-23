@@ -1,0 +1,1 @@
+| 2026-11-23 | An Exchange server that offers only older (CBC) encryption: setup asks the owner, per account, and on Windows the system's TLS then speaks it for that server alone (certificate still checked); off by default, rustls and the default suites unchanged |

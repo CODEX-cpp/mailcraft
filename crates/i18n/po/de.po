@@ -16962,6 +16962,11 @@ msgstr "Der Server hat geantwortet, ohne die Adresse der Exchange Web Services a
 msgid "The server answered, but not as an Exchange server does. Check its address in Server settings."
 msgstr "Der Server hat geantwortet, aber nicht wie ein Exchange-Server. Überprüfen Sie seine Adresse in den Servereinstellungen."
 
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "The server at {host} offers only older encryption (CBC suites). MailCraft doesn't use it unless you agree: it is weaker than what current servers offer."
+msgstr ""
+
 #. what a command says
 #: crates/mobile/src/fetch.rs
 #, fuzzy
@@ -19202,6 +19207,16 @@ msgstr "Stattdessen https:// verwenden"
 msgid "Use my own working hours"
 msgstr "Meine eigenen Arbeitszeiten verwenden"
 
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Use older encryption for this account"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Use older encryption for this server?"
+msgstr ""
+
 #. name
 #: crates/ui-egui/src/motion.rs crates/ui-egui/src/theme.rs
 #, fuzzy
@@ -20172,6 +20187,11 @@ msgstr "Ihren eigenen Schlüssel können nur Sie im Fenster entfernen"
 #, fuzzy
 msgid "Your own name."
 msgstr "Ihr eigener Name."
+
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Your sign-in and mail are still encrypted, and the server's certificate is still checked. Agree only if your administrator can't turn the newer encryption on."
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/mail_view.rs
@@ -23562,6 +23582,11 @@ msgstr "{host} ist der Eintrag, den die ISP-Datenbank von Mozilla für {domain} 
 #: crates/ui-egui/src/account_setup.rs
 msgid "{host} is what {domain} publishes for mail programs (its autoconfig document)."
 msgstr "{host} ist der Eintrag, den {domain} für E-Mail-Programme veröffentlicht (im Autoconfig-Dokument)."
+
+#. why a mail server couldn't be used
+#: crates/net/src/lib.rs
+msgid "{host} offers only older encryption (CBC suites) that MailCraft doesn't use unless you agree to it"
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/account_setup.rs

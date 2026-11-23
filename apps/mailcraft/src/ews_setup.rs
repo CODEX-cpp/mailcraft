@@ -49,6 +49,8 @@ pub(crate) enum Probed {
     Works(&'static str),
     /// The system doesn't trust the certificate: nothing was sent.
     Certificate(CertificateProblem),
+    /// The server offers only older encryption (CBC suites): the owner is asked whether to use it.
+    OlderEncryption,
     /// It did not work.
     Failed(EwsSetupFailure),
 }
@@ -126,6 +128,7 @@ impl World for Real {
             Ok(_) => Probed::Works("basic"),
             Err(NetError::Certificate(problem)) => Probed::Certificate(*problem),
             Err(NetError::Config(_)) => Probed::Failed(EwsSetupFailure::BadSettings),
+            Err(NetError::OlderEncryption { .. }) => Probed::OlderEncryption,
             Err(NetError::Tls { .. }) => Probed::Failed(EwsSetupFailure::SecureConnection),
             Err(_) => Probed::Failed(EwsSetupFailure::Unreachable),
         }
@@ -137,6 +140,9 @@ pub(crate) fn judged(transport: &Transport, error: &Error) -> Probed {
     // A certificate that wasn't accepted comes first: it stopped the exchange before anything went.
     if let Some(problem) = transport.problem() {
         return Probed::Certificate(problem);
+    }
+    if transport.older_encryption() {
+        return Probed::OlderEncryption;
     }
     if let Some(problem) = transport.auth_problem() {
         return Probed::Failed(match problem {
@@ -219,12 +225,15 @@ fn answer(job: &EwsSetupJob) -> Option<bool> {
 }
 
 /// Test the account at each address in turn, the first that answers deciding.
-fn test(world: &dyn World, urls: &[String], who: &Who, trusted: &str) -> EwsSetupEnd {
+fn test(world: &dyn World, urls: &[String], who: &Who, trusted: &str, older_encryption: bool) -> EwsSetupEnd {
     let mut last = EwsSetupFailure::Unreachable;
     for url in urls {
+        // What the owner agreed to (or not) for this server, before the first request goes.
+        crate::ews_runner::agree_older_encryption(url, older_encryption);
         match world.probe(url, who, trusted) {
             Probed::Works(with) => return EwsSetupEnd::Works { url: url.clone(), signed_in_with: with.to_owned() },
             Probed::Certificate(problem) => return certificate_end(url, problem),
+            Probed::OlderEncryption => return EwsSetupEnd::OlderEncryption { url: url.clone() },
             // (Only a server that wasn't there makes the next address worth a try.)
             Probed::Failed(EwsSetupFailure::Unreachable) => last = EwsSetupFailure::Unreachable,
             Probed::Failed(failure) => return EwsSetupEnd::Failed(failure),
@@ -248,6 +257,7 @@ fn decide(world: &dyn World, job: &EwsSetupJob, emit: &mut dyn FnMut(EwsSetupEve
         }
         return match world.look(&job.url, &job.trusted) {
             Probed::Certificate(problem) => certificate_end(&job.url, problem),
+            Probed::OlderEncryption => EwsSetupEnd::OlderEncryption { url: job.url.clone() },
             Probed::Works(_) => EwsSetupEnd::CertificateFine,
             Probed::Failed(failure) => EwsSetupEnd::Failed(failure),
         };
@@ -258,7 +268,7 @@ fn decide(world: &dyn World, job: &EwsSetupJob, emit: &mut dyn FnMut(EwsSetupEve
         if on_microsoft(&job.url) {
             return EwsSetupEnd::ExchangeOnline;
         }
-        return test(world, &[job.url.trim().to_owned()], &who, &job.trusted);
+        return test(world, &[job.url.trim().to_owned()], &who, &job.trusted, job.older_encryption);
     }
     let name = if who.username.trim().is_empty() { who.email.trim() } else { who.username.trim() };
     let Ok(secret) = Secret::basic(name, &who.password) else { return EwsSetupEnd::Failed(EwsSetupFailure::BadSettings) };
@@ -294,7 +304,7 @@ fn decide(world: &dyn World, job: &EwsSetupJob, emit: &mut dyn FnMut(EwsSetupEve
     match outcome {
         Outcome::Found(found) => {
             let urls: Vec<String> = found.urls().into_iter().map(str::to_owned).collect();
-            test(world, &urls, &who, &job.trusted)
+            test(world, &urls, &who, &job.trusted, job.older_encryption)
         }
         Outcome::ExchangeOnline => EwsSetupEnd::ExchangeOnline,
         Outcome::Failed(failure) => EwsSetupEnd::Failed(failure_of(failure)),

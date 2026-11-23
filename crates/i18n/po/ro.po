@@ -18096,6 +18096,11 @@ msgstr "Serverul a răspuns fără adresa Exchange Web Services. Cereți-o admin
 msgid "The server answered, but not as an Exchange server does. Check its address in Server settings."
 msgstr "Serverul a răspuns, dar nu ca un server Exchange. Verificați-i adresa în Setări server."
 
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "The server at {host} offers only older encryption (CBC suites). MailCraft doesn't use it unless you agree: it is weaker than what current servers offer."
+msgstr ""
+
 #. what a command says
 #: crates/mobile/src/fetch.rs
 #, fuzzy
@@ -20489,6 +20494,16 @@ msgstr "Folosiți https:// în schimb"
 msgid "Use my own working hours"
 msgstr "Folosiți propriul program de lucru"
 
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Use older encryption for this account"
+msgstr ""
+
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Use older encryption for this server?"
+msgstr ""
+
 #. name
 #: crates/ui-egui/src/motion.rs crates/ui-egui/src/theme.rs
 #, fuzzy
@@ -21522,6 +21537,11 @@ msgstr "Cheia dvs. proprie o eliminați doar dvs., din fereastră"
 #, fuzzy
 msgid "Your own name."
 msgstr "Numele dvs."
+
+#. interface
+#: crates/ui-egui/src/account_setup/exchange.rs
+msgid "Your sign-in and mail are still encrypted, and the server's certificate is still checked. Agree only if your administrator can't turn the newer encryption on."
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/mail_view.rs
@@ -25110,6 +25130,11 @@ msgstr "{host} este ce listează baza de date ISP Mozilla pentru {domain}."
 #, fuzzy
 msgid "{host} is what {domain} publishes for mail programs (its autoconfig document)."
 msgstr "{host} este ce publică {domain} pentru programele de e-mail (documentul său autoconfig)."
+
+#. why a mail server couldn't be used
+#: crates/net/src/lib.rs
+msgid "{host} offers only older encryption (CBC suites) that MailCraft doesn't use unless you agree to it"
+msgstr ""
 
 #. interface
 #: crates/ui-egui/src/account_setup.rs

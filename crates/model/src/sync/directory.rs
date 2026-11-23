@@ -131,6 +131,9 @@ pub struct EwsResolveRequest {
     /// The fingerprint of the one certificate the owner trusts for this account; empty when none.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub trusted: String,
+    /// The owner agreed to the older encryption this server offers alone.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub older_encryption: bool,
     /// The names as typed, each looked up as it is: at most [`MAX_RESOLVE_TEXTS`].
     pub texts: Vec<String>,
 }

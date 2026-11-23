@@ -58,6 +58,10 @@ pub(super) struct Exchange {
     ticked: bool,
     /// The fingerprint the owner has agreed to; sent with the next test and kept on the account.
     pub(super) trusted: String,
+    /// The address of a server that offers only older encryption, which the owner is asked about.
+    older_ask: Option<String>,
+    /// The owner agreed to that older encryption for this account: sent with the next test and kept on it.
+    pub(super) older: bool,
     /// The account whose certificate is being looked at again (from File › Info); 0 when the
     /// wizard is adding one.
     pub(super) review: Id,
@@ -298,6 +302,7 @@ impl AccountSetup {
             return;
         }
         self.exchange.trusted.clear();
+        (self.exchange.older, self.exchange.older_ask) = (false, None);
         let url = self.exchange.url.trim().to_string();
         self.exchange_run(app, url, String::new(), false);
     }
@@ -321,6 +326,7 @@ impl AccountSetup {
             password: if certificate_only { String::new() } else { self.password.0.clone() },
             url,
             trusted,
+            older_encryption: self.exchange.older,
             certificate_only,
             cancel: self.exchange.cancel.clone(),
             answers,
@@ -445,6 +451,13 @@ impl AccountSetup {
     /// adding the account, the test is made again against the same server with the fingerprint; for
     /// an account that exists, the fingerprint is kept on it. `true` when the dialog is done.
     fn exchange_trust(&mut self, app: &mut MailApp) -> bool {
+        // "Use older encryption for this account": the test is made again, with the owner's yes.
+        if let Some(url) = self.exchange.older_ask.clone().filter(|_| self.exchange.ticked) {
+            (self.exchange.older, self.exchange.older_ask) = (true, None);
+            let trusted = self.exchange.trusted.clone();
+            self.exchange_run(app, url, trusted, false);
+            return false;
+        }
         let Some(certificate) = self.exchange.certificate.clone().filter(|_| self.exchange.ticked) else { return false };
         // (An expired certificate never gets here: the host does not offer it.)
         if EwsServer::check_fingerprint(&certificate.fingerprint).is_err() || certificate.fingerprint.is_empty() {
@@ -526,7 +539,15 @@ impl AccountSetup {
             }
             EwsSetupEnd::Certificate(certificate) => {
                 self.exchange.certificate = Some(certificate);
-                self.exchange.ticked = false;
+                (self.exchange.older_ask, self.exchange.ticked) = (None, false);
+                self.go(Page::ExchangeCertificate);
+            }
+            // Only the wizard that adds an account asks: a look at a saved account's certificate can't.
+            EwsSetupEnd::OlderEncryption { .. } if self.exchange.review != 0 => {
+                self.exchange_finished(app, EwsSetupEnd::Failed(EwsSetupFailure::SecureConnection));
+            }
+            EwsSetupEnd::OlderEncryption { url } => {
+                (self.exchange.older_ask, self.exchange.certificate, self.exchange.ticked) = (Some(url), None, false);
                 self.go(Page::ExchangeCertificate);
             }
             EwsSetupEnd::CertificateFine => {
@@ -573,6 +594,9 @@ impl AccountSetup {
         }
         if !self.exchange.trusted.is_empty() {
             ews.insert("trusted".into(), json!(self.exchange.trusted));
+        }
+        if self.exchange.older {
+            ews.insert("olderEncryption".into(), json!(true));
         }
         let added = app.execute("account.add", json!({"email": email, "displayName": self.name.trim(), "kind": "exchange", "ews": ews}));
         match added.map(|v| v.get("id").and_then(Value::as_u64)) {
@@ -812,6 +836,9 @@ impl AccountSetup {
     /// account. A review that came to nothing the owner may decide says why instead.
     pub(super) fn exchange_certificate(&mut self, ui: &mut Ui, pass: &Pass) -> Option<Action> {
         let t = pass.t;
+        if let Some(url) = self.exchange.older_ask.clone() {
+            return self.exchange_older(ui, pass, &url);
+        }
         let Some(certificate) = self.exchange.certificate.clone() else {
             // Nothing to decide: the words, and Close.
             page(ui, &t, |ui| {
@@ -856,6 +883,44 @@ impl AccountSetup {
             note(
                 ui,
                 tl!("Only this certificate is trusted, and only for this account. If the server shows another one later, you are asked again."),
+                t.text_dim,
+            );
+        });
+        problem(ui, &self.error);
+        let ready = self.exchange.ticked;
+        let (mut go, mut back) = (false, false);
+        strip(ui, self.page, |ui| {
+            go = button(ui, tl!("Continue"), true, ready).clicked();
+            back = button(ui, tl!("Back"), false, true).clicked();
+        });
+        if back { Some(Action::Back) } else { (ready && (go || pass.submit)).then_some(Action::Go) }
+    }
+
+    /// A server that offers only older encryption: what that means, and the box that agrees to it
+    /// for this account. Off until the owner ticks it.
+    fn exchange_older(&mut self, ui: &mut Ui, pass: &Pass, url: &str) -> Option<Action> {
+        let t = pass.t;
+        let host = EwsServer { url: url.to_string(), ..Default::default() }.host().map(str::to_string).unwrap_or_default();
+        let host = shown(&host, 120);
+        page(ui, &t, |ui| {
+            heading(ui, tl!("Use older encryption for this server?"), &t);
+            note(
+                ui,
+                &fmt(
+                    tl!(
+                        "The server at {host} offers only older encryption (CBC suites). MailCraft doesn't use it unless you agree: it is weaker than what current servers offer."
+                    ),
+                    &[("host", &host)],
+                ),
+                t.text,
+            );
+            ui.add_space(6.0);
+            ui.checkbox(&mut self.exchange.ticked, tl!("Use older encryption for this account"));
+            note(
+                ui,
+                tl!(
+                    "Your sign-in and mail are still encrypted, and the server's certificate is still checked. Agree only if your administrator can't turn the newer encryption on."
+                ),
                 t.text_dim,
             );
         });
